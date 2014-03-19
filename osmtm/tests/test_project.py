@@ -4,10 +4,8 @@ import transaction
 from pyramid import testing
 
 from ..models import (
-    DBSession,
     Base,
-    Area,
-    Project
+    DBSession,
     )
 
 from geoalchemy2 import (
@@ -16,37 +14,19 @@ from geoalchemy2 import (
     elements,
     )
 
+from sqlalchemy import create_engine
 from sqlalchemy_i18n.manager import translation_manager
 from sqlalchemy.orm import configure_mappers
 
-def _initTestingDB():
-    from sqlalchemy import create_engine
-    engine = create_engine('postgresql://www-data@localhost/osmtm_tests')
-    DBSession.configure(bind=engine)
-    translation_manager.options.update({
-        'locales': ['en'],
-        'get_locale_fallback': True
-    })
-    configure_mappers()
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
-
-    with transaction.manager:
-        import shapely
-        import geojson
-        geometry = '{"type":"Polygon","coordinates":[[[7.237243652343749,41.25922682850892],[7.23175048828125,41.12074559016745],[7.415771484374999,41.20552261955812],[7.237243652343749,41.25922682850892]]]}'
-        geometry = geojson.loads(geometry, object_hook=geojson.GeoJSON.to_instance)
-        geometry = shapely.geometry.asShape(geometry)
-        geometry = shape.from_shape(geometry, 4326)
-
-        area = Area(geometry)
-
-        project = Project(
-            u'Short project description',
-        )
-        project.area = area
-        DBSession.add(project)
-        project.auto_fill(12)
+translation_manager.options.update({
+    'locales': ['en'],
+    'get_locale_fallback': True
+})
+engine = create_engine('postgresql://www-data@localhost/osmtm_tests')
+DBSession.configure(bind=engine)
+configure_mappers()
+Base.metadata.drop_all(engine)
+Base.metadata.create_all(engine)
 
 def _registerRoutes(config):
     config.add_route('home', '/')
@@ -57,17 +37,26 @@ def _registerRoutes(config):
     config.add_route('project_partition_grid', '/project/{project}/partition/grid')
     config.add_route('project_partition_import', '/project/{project}/partition/import')
 
-class TestProject(unittest.TestCase):
+class UnitTestBase(unittest.TestCase):
+
     def setUp(self):
-        _initTestingDB()
-        self.config = testing.setUp()
+        self.config = testing.setUp(request=testing.DummyRequest())
+        super(UnitTestBase, self).setUp()
         _registerRoutes(self.config)
 
-    def tearDown(self):
-        DBSession.remove()
-        testing.tearDown()
+class TestProject(UnitTestBase):
 
     def test_it(self):
+
+        from ..models import (
+            Project,
+            )
+        p = Project(
+            u'Short project description',
+        )
+
+        DBSession.add(p)
+
         from ..views.project import project
         request = testing.DummyRequest()
 
@@ -75,12 +64,16 @@ class TestProject(unittest.TestCase):
         info = project(request)
         self.assertEqual(info['project'], DBSession.query(Project).get(1))
 
+    def test_doesnt_exist(self):
+        from ..views.project import project
+        request = testing.DummyRequest()
+
         # doesn't exist
-        request.matchdict = {'project': 999}
+        request.matchdict = {'project': 1}
         response = project(request)
         self.assertEqual(response.location, 'http://example.com/')
 
-class TestProjectNewGrid(unittest.TestCase):
+class TestProjectNew(UnitTestBase):
 
     def setUp(self):
         self.config = testing.setUp()
@@ -90,12 +83,16 @@ class TestProjectNewGrid(unittest.TestCase):
         DBSession.remove()
         testing.tearDown()
 
-    def test_it(self):
+    def test_not_submitted(self):
         from ..views.project import project_new
-        self.config.testing_securitypolicy(userid=321)
 
         request = testing.DummyRequest()
-        response = project_new(request)
+        info = project_new(request)
+        self.assertEqual(info['page_id'], 'project_new')
+
+    def test_submitted_grid(self):
+        from ..views.project import project_new
+        self.config.testing_securitypolicy(userid=321)
 
         request = testing.DummyRequest()
         request.params = {
@@ -106,22 +103,9 @@ class TestProjectNewGrid(unittest.TestCase):
         response = project_new(request)
         self.assertEqual(response.location, 'http://example.com/project/2/partition/grid')
 
-class TestProjectNewImport(unittest.TestCase):
-
-    def setUp(self):
-        self.config = testing.setUp()
-        _registerRoutes(self.config)
-
-    def tearDown(self):
-        DBSession.remove()
-        testing.tearDown()
-
-    def test_it(self):
+    def test_submitted_import(self):
         from ..views.project import project_new
         self.config.testing_securitypolicy(userid=321)
-
-        request = testing.DummyRequest()
-        response = project_new(request)
 
         request = testing.DummyRequest()
         request.params = {
@@ -131,34 +115,3 @@ class TestProjectNewImport(unittest.TestCase):
         }
         response = project_new(request)
         self.assertEqual(response.location, 'http://example.com/project/3/partition/import')
-
-class TestProjectEdit(unittest.TestCase):
-
-    def setUp(self):
-        self.config = testing.setUp()
-        _registerRoutes(self.config)
-
-    def tearDown(self):
-        DBSession.remove()
-        testing.tearDown()
-
-    def test_it(self):
-        from ..views.project import project_edit
-
-        request = testing.DummyRequest()
-        request.matchdict = {'project': 1}
-        response = project_edit(request)
-        self.assertEqual(response['project'], DBSession.query(Project).get(1))
-
-        request = testing.DummyRequest()
-        request.matchdict = {'project': 1}
-        request.params = {
-            'form.submitted': True,
-            'name_en':u'NewProject',
-            'short_description_en':u'SomeShortDescription',
-            'description_en':u'SomeDescription',
-            'imagery': u'',
-            'license_id': u''
-        }
-        response = project_edit(request)
-        self.assertEqual(response.location, 'http://example.com/project/1')
