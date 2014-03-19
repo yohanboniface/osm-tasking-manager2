@@ -25,6 +25,7 @@ requires = [
     'Babel',
     'sqlalchemy-i18n==0.8.2'
     ]
+test_requires = requires.extend(['WebTest'])
 
 setup(name='osmtm',
       version='2.0',
@@ -45,6 +46,7 @@ setup(name='osmtm',
       zip_safe=False,
       test_suite='osmtm',
       install_requires=requires,
+      tests_require=test_requires,
       entry_points="""\
       [paste.app_factory]
       main = osmtm:main
