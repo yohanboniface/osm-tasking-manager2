@@ -22,7 +22,8 @@ translation_manager.options.update({
     'locales': ['en'],
     'get_locale_fallback': True
 })
-engine = create_engine('postgresql://www-data@localhost/osmtm_tests')
+SQLALCHEMY_URL = 'postgresql://www-data@localhost/osmtm_tests'
+engine = create_engine(SQLALCHEMY_URL)
 DBSession.configure(bind=engine)
 configure_mappers()
 Base.metadata.drop_all(engine)
@@ -74,10 +75,6 @@ class TestProject(UnitTestBase):
         self.assertEqual(response.location, 'http://example.com/')
 
 class TestProjectNew(UnitTestBase):
-
-    def setUp(self):
-        self.config = testing.setUp()
-        _registerRoutes(self.config)
 
     def tearDown(self):
         DBSession.remove()
