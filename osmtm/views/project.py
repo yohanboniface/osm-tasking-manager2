@@ -32,6 +32,9 @@ except:  # pragma: no cover
 
 from .task import get_locked_task, check_task_expiration
 
+import logging
+log = logging.getLogger(__name__)
+
 
 @view_config(route_name='project', renderer='project.mako', http_cache=0)
 def project(request):
@@ -233,3 +236,41 @@ def get_contributors(project):
         contributors[username] = [task[0] for task in tasks]
 
     return contributors
+
+
+def get_stats(project):
+    """
+    the changes to create a chart with
+    """
+
+    filter = and_(
+        TaskHistory.change == True,  # noqa
+        TaskHistory.project_id == project.id
+    )
+    tasks = (
+        DBSession.query(
+            TaskHistory.id,
+            TaskHistory.state,
+            TaskHistory.update
+        )
+        .filter(filter)
+        .order_by(TaskHistory.update)
+        .all()
+    )
+
+    log.debug('Number of tiles: %s', len(tasks))
+    stats = []
+    done = 0
+
+    # for every day count number of changes and aggregate changed tiles
+    for task in tasks:
+        if task.state == TaskHistory.state_done:
+            done += 1
+        if task.state == TaskHistory.state_invalidated:
+            done -= 1
+
+        # append a day to the stats and add total number of 'done' tiles and a
+        # copy of a current tile_changes list
+        stats.append([task.update.isoformat(), done])
+
+    return stats
