@@ -87,7 +87,19 @@
 
           <!-- description -->
           <div class="form-group">
-            <label for="id_description" class="control-label">Description</label>
+            <label for="id_description" class="control-label">Description
+              <div class="btn-group">
+                <a href data-toggle="dropdown" class="dropdown-toggle btn btn-default btn-xs">
+                  en
+                  <b class="caret"></b>
+                </a>
+                <ul role="menu" class="dropdown-menu languages">
+                  % for locale, translation in project.translations.iteritems():
+                  <li><a href="#description_${locale}" data-toggle="tab">${locale}</a></li>
+                  % endfor
+                </ul>
+              </div>
+            </label>
             <ul class="nav nav-pills small">
               <li class="active">
                 <a href="#description_${locale}_edit" data-toggle="tab">Edit</a>
